@@ -196,6 +196,12 @@
           <path d="M8 16H3v5" />
         </IconBase>
       );
+      const Edit2 = (props) => (
+        <IconBase {...props}>
+          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+          <path d="m15 5 4 4" />
+        </IconBase>
+      );
 
       // --- Utility ---
       const getLocalDateString = (date) => {
@@ -302,16 +308,15 @@
 
         const areaPath = `0,${chartHeight} ${points} ${chartWidth},${chartHeight}`;
 
-        // 達標放煙火特效 logic
         useEffect(() => {
           if (stats.monthTotal >= monthlyGoal && monthlyGoal > 0) {
             const hasCelebrated = sessionStorage.getItem(
               `celebrated-${monthlyGoal}-${stats.monthTotal}`,
             );
             if (!hasCelebrated) {
-              var duration = 1500;
-              var animationEnd = Date.now() + duration;
-              var defaults = {
+              const duration = 1500;
+              const animationEnd = Date.now() + duration;
+              const defaults = {
                 startVelocity: 30,
                 spread: 500,
                 ticks: 60,
@@ -323,14 +328,14 @@
                 return Math.random() * (max - min) + min;
               }
 
-              var interval = setInterval(function () {
-                var timeLeft = animationEnd - Date.now();
+              const interval = setInterval(function () {
+                const timeLeft = animationEnd - Date.now();
 
                 if (timeLeft <= 0) {
                   return clearInterval(interval);
                 }
 
-                var particleCount = 50 * (timeLeft / duration);
+                const particleCount = 50 * (timeLeft / duration);
                 // since particles fall down, start a bit higher than random
                 confetti({
                   ...defaults,
@@ -362,7 +367,7 @@
             <div className="flex justify-between items-center">
               <div>
                 <h1 className="text-2xl font-bold text-white">
-                  早安，{runnerName}
+                  哈囉！{runnerName}
                 </h1>
                 <p className="text-slate-400 text-sm">今天也要持續前進！</p>
               </div>
@@ -498,10 +503,12 @@
         );
       };
 
-      const AddRunView = ({ onSave, onCancel }) => {
-        const [date, setDate] = useState(getLocalDateString(new Date()));
-        const [distance, setDistance] = useState("");
-        const [note, setNote] = useState("");
+      const AddRunView = ({ initialData, onSave, onCancel }) => {
+        const [date, setDate] = useState(
+          initialData?.date || getLocalDateString(new Date()),
+        );
+        const [distance, setDistance] = useState(initialData?.distance || "");
+        const [note, setNote] = useState(initialData?.note || "");
 
         const handleSubmit = (e) => {
           e.preventDefault();
@@ -511,7 +518,9 @@
 
         return (
           <div className="h-full flex flex-col animate-in slide-in-from-bottom-5 duration-300">
-            <h2 className="text-2xl font-bold text-white mb-6">新增紀錄</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">
+              {initialData ? "編輯紀錄" : "新增紀錄"}
+            </h2>
             <form onSubmit={handleSubmit} className="space-y-6 flex-1">
               <div>
                 <label className="block text-slate-400 text-sm mb-2">
@@ -564,7 +573,7 @@
                 type="submit"
                 className="w-full bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition"
               >
-                儲存紀錄
+                {initialData ? "更新紀錄" : "儲存紀錄"}
               </button>
               <button
                 type="button"
@@ -578,7 +587,7 @@
         );
       };
 
-      const HistoryView = ({ runs, onDelete, onBack }) => (
+      const HistoryView = ({ runs, onEdit, onDelete, onBack }) => (
         <div className="pb-20 animate-in fade-in duration-300">
           <div className="flex items-center gap-3 mb-6">
             <button onClick={onBack} className="p-2 bg-slate-800 rounded-lg">
@@ -603,12 +612,20 @@
                     <div className="text-xs text-slate-400">{run.date}</div>
                   </div>
                 </div>
-                <button
-                  onClick={() => onDelete(run.id)}
-                  className="text-slate-600 hover:text-red-400 p-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => onEdit(run.id)}
+                    className="text-slate-400 hover:text-white p-2"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onDelete(run.id)}
+                    className="text-slate-400 hover:text-white p-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))}
             {runs.length === 0 && (
@@ -637,9 +654,12 @@
         );
 
         const [view, setView] = useState("dashboard");
+        const [editingId, setEditingId] = useState(null);
+
         const [isEditingSettings, setIsEditingSettings] = useState(false);
         const [tempGoal, setTempGoal] = useState(monthlyGoal);
         const [tempName, setTempName] = useState(runnerName);
+        const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
         useEffect(() => {
           localStorage.setItem("running-logs", JSON.stringify(runs));
@@ -709,6 +729,34 @@
           };
         }, [runs, monthlyGoal]);
 
+        const handleSaveRun = (data) => {
+          if (editingId) {
+            // Update existing run
+            setRuns(
+              runs.map((r) => (r.id === editingId ? { ...r, ...data } : r)),
+            );
+            setEditingId(null);
+          } else {
+            // Create new run
+            setRuns(
+              [{ id: Date.now(), ...data }, ...runs].sort(
+                (a, b) => new Date(b.date) - new Date(a.date),
+              ),
+            );
+          }
+          setView("dashboard");
+        };
+
+        const handleEditRun = (id) => {
+          setEditingId(id);
+          setView("add");
+        };
+
+        const handleCancelEdit = () => {
+          setEditingId(null);
+          setView("dashboard");
+        };
+
         return (
           <div className="max-w-md mx-auto min-h-screen relative flex flex-col">
             <div className="flex-1 p-5 overflow-y-auto">
@@ -728,21 +776,16 @@
               )}
               {view === "add" && (
                 <AddRunView
-                  onSave={(data) => {
-                    setRuns(
-                      [{ id: Date.now(), ...data }, ...runs].sort(
-                        (a, b) => new Date(b.date) - new Date(a.date),
-                      ),
-                    );
-                    setView("dashboard");
-                  }}
-                  onCancel={() => setView("dashboard")}
+                  initialData={runs.find((r) => r.id === editingId)}
+                  onSave={handleSaveRun}
+                  onCancel={handleCancelEdit}
                 />
               )}
               {view === "history" && (
                 <HistoryView
                   runs={runs}
-                  onDelete={(id) => setRuns(runs.filter((r) => r.id !== id))}
+                  onEdit={handleEditRun}
+                  onDelete={(id) => setDeleteConfirmId(id)}
                   onBack={() => setView("dashboard")}
                 />
               )}
@@ -820,6 +863,36 @@
               </div>
             )}
 
+            {deleteConfirmId !== null && (
+              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
+                <Card className="w-full max-w-sm">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                    <Trash2 className="w-5 h-5 text-red-500" /> 確認刪除
+                  </h3>
+                  <p className="text-slate-400 mb-6">
+                    確定要刪除這筆紀錄嗎？此動作無法復原。
+                  </p>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setDeleteConfirmId(null)}
+                      className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRuns(runs.filter((r) => r.id !== deleteConfirmId));
+                        setDeleteConfirmId(null);
+                      }}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl transition"
+                    >
+                      刪除
+                    </button>
+                  </div>
+                </Card>
+              </div>
+            )}
+
             {view !== "add" && (
               <div className="sticky bottom-0 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 p-4 pb-8 flex justify-around items-center z-40">
                 <button
@@ -830,7 +903,10 @@
                   <span className="text-[10px]">進度</span>
                 </button>
                 <button
-                  onClick={() => setView("add")}
+                  onClick={() => {
+                    setEditingId(null);
+                    setView("add");
+                  }}
                   className="bg-orange-500 text-white p-4 rounded-full -mt-12 border-4 border-slate-900 shadow-xl active:scale-95 transition"
                 >
                   <Plus className="w-8 h-8" />
