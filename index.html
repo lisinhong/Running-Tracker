@@ -36,6 +36,9 @@
     ></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Confetti Effect Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
     <style>
       body {
         background-color: #0f172a;
@@ -51,6 +54,23 @@
       input,
       textarea {
         user-select: text;
+      }
+      /* Custom date input styling to fix mobile issues */
+      input[type="date"] {
+        -webkit-appearance: none;
+        min-height: 3rem; /* Ensure standard height */
+      }
+      /* Hide default calendar icon in some browsers to use our custom one */
+      input[type="date"]::-webkit-calendar-picker-indicator {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        cursor: pointer;
+        opacity: 0;
       }
     </style>
   </head>
@@ -158,6 +178,16 @@
           <circle cx="12" cy="7" r="4" />
         </IconBase>
       );
+      const Medal = (props) => (
+        <IconBase {...props}>
+          <path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15" />
+          <path d="M11 12 5.12 2.2" />
+          <path d="m13 12 5.88-9.8" />
+          <path d="M8 7h8" />
+          <circle cx="12" cy="17" r="5" />
+          <path d="M12 18v-2h-.5" />
+        </IconBase>
+      );
 
       // --- Utility ---
       const getLocalDateString = (date) => {
@@ -184,48 +214,61 @@
       }) => {
         const radius = (size - strokeWidth) / 2;
         const circumference = radius * 2 * Math.PI;
+        const isCompleted = value >= max;
         const progress = Math.min(value / max, 1);
         const dashoffset = circumference - progress * circumference;
 
+        // 達標使用金色，否則橘色
+        const strokeColor = isCompleted ? "text-yellow-400" : "text-orange-500";
+
         return (
-          <div
-            className="relative flex items-center justify-center"
-            style={{ width: size, height: size }}
-          >
-            <svg width={size} height={size} className="transform -rotate-90">
-              <circle
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                stroke="currentColor"
-                strokeWidth={strokeWidth}
-                fill="transparent"
-                className="text-slate-700"
-              />
-              <circle
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                stroke="currentColor"
-                strokeWidth={strokeWidth}
-                fill="transparent"
-                strokeDasharray={circumference}
-                strokeDashoffset={dashoffset}
-                strokeLinecap="round"
-                className="text-orange-500 transition-all duration-1000 ease-out"
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-              <span className="text-4xl font-bold font-mono">
-                {value.toFixed(1)}
-              </span>
-              <span className="text-xs text-slate-400 uppercase tracking-wider mt-1">
-                本月公里數
-              </span>
-              <span className="text-xs text-orange-400 mt-1 font-medium">
-                目標: {max} km
-              </span>
+          <div className="relative flex flex-col items-center">
+            <div
+              className="relative flex items-center justify-center mb-3"
+              style={{ width: size, height: size }}
+            >
+              <svg width={size} height={size} className="transform -rotate-90">
+                <circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  stroke="currentColor"
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                  className="text-slate-700"
+                />
+                <circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  stroke="currentColor"
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={dashoffset}
+                  strokeLinecap="round"
+                  className={`${strokeColor} transition-all duration-1000 ease-out`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+                <span className="text-xs uppercase tracking-wider mb-1">
+                  本月公里數
+                </span>
+                <span className="text-4xl font-bold font-mono">
+                  {value.toFixed(1)}
+                </span>
+                <span
+                  className={`text-xs mt-1 font-medium ${isCompleted ? "text-yellow-400" : "text-orange-400"}`}
+                >
+                  目標: {max} km
+                </span>
+              </div>
             </div>
+            {isCompleted && (
+              <div className="animate-[bounce_1s_3.5] flex items-center gap-1 bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-xs font-bold border border-yellow-500/50">
+                <Medal className="w-3 h-3" /> 目標達成！
+              </div>
+            )}
           </div>
         );
       };
@@ -251,6 +294,62 @@
           .join(" ");
 
         const areaPath = `0,${chartHeight} ${points} ${chartWidth},${chartHeight}`;
+
+        // 達標放煙火特效 logic
+        useEffect(() => {
+          if (stats.monthTotal >= monthlyGoal && monthlyGoal > 0) {
+            // 使用 session storage 避免每次切換 tab 都噴一次，只在這次 session 第一次達標或刷新時噴
+            const hasCelebrated = sessionStorage.getItem(
+              `celebrated-${monthlyGoal}-${stats.monthTotal}`,
+            );
+            if (!hasCelebrated) {
+              var duration = 1500;
+              var animationEnd = Date.now() + duration;
+              var defaults = {
+                startVelocity: 30,
+                spread: 500,
+                ticks: 60,
+                zIndex: 0,
+                colors: ["#fbbf24", "#f97316", "#ffffff"], // 金、橘、白
+              };
+
+              function randomInRange(min, max) {
+                return Math.random() * (max - min) + min;
+              }
+
+              var interval = setInterval(function () {
+                var timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                  return clearInterval(interval);
+                }
+
+                var particleCount = 50 * (timeLeft / duration);
+                // since particles fall down, start a bit higher than random
+                confetti({
+                  ...defaults,
+                  particleCount,
+                  origin: {
+                    x: randomInRange(0.1, 0.3),
+                    y: Math.random() - 0.2,
+                  },
+                });
+                confetti({
+                  ...defaults,
+                  particleCount,
+                  origin: {
+                    x: randomInRange(0.7, 0.9),
+                    y: Math.random() - 0.2,
+                  },
+                });
+              }, 300);
+              sessionStorage.setItem(
+                `celebrated-${monthlyGoal}-${stats.monthTotal}`,
+                "true",
+              );
+            }
+          }
+        }, [stats.monthTotal, monthlyGoal]);
 
         return (
           <div className="space-y-6 pb-24 animate-in fade-in duration-500">
@@ -415,16 +514,17 @@
                 <label className="block text-slate-400 text-sm mb-2">
                   日期
                 </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-3.5 text-slate-400">
+                <div className="relative w-full">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
                     <Calendar className="w-5 h-5" />
                   </span>
+                  {/* Fix for mobile: text-base prevents zoom, h-14 ensures touch target size, appearance-none fixes styling */}
                   <input
                     type="date"
                     required
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full bg-slate-800 text-white rounded-xl p-4 pl-12 border border-slate-700 focus:border-orange-500 outline-none"
+                    className="w-full bg-slate-800 text-white text-base rounded-xl h-14 pl-12 pr-4 border border-slate-700 focus:border-orange-500 outline-none appearance-none relative"
                   />
                 </div>
               </div>
@@ -432,8 +532,8 @@
                 <label className="block text-slate-400 text-sm mb-2">
                   距離 (km)
                 </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-3.5 text-slate-400">
+                <div className="relative w-full">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-10">
                     <Activity className="w-5 h-5" />
                   </span>
                   <input
@@ -443,7 +543,7 @@
                     placeholder="0.00"
                     value={distance}
                     onChange={(e) => setDistance(e.target.value)}
-                    className="w-full bg-slate-800 text-white rounded-xl p-4 pl-12 border border-slate-700 focus:border-orange-500 outline-none text-xl font-mono"
+                    className="w-full bg-slate-800 text-white text-base rounded-xl h-14 pl-12 pr-4 border border-slate-700 focus:border-orange-500 outline-none text-xl font-mono appearance-none"
                   />
                 </div>
               </div>
@@ -455,7 +555,7 @@
                   placeholder="今天跑得如何..."
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  className="w-full bg-slate-800 text-white rounded-xl p-4 border border-slate-700 focus:border-orange-500 outline-none h-32 resize-none"
+                  className="w-full bg-slate-800 text-white text-base rounded-xl p-4 border border-slate-700 focus:border-orange-500 outline-none h-32 resize-none"
                 />
               </div>
               <button
