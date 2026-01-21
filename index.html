@@ -152,6 +152,11 @@
           <path d="m9 18 6-6-6-6" />
         </IconBase>
       );
+      const ChevronLeft = (props) => (
+        <IconBase {...props}>
+          <path d="m15 18-6-6 6-6" />
+        </IconBase>
+      );
       const Target = (props) => (
         <IconBase {...props}>
           <circle cx="12" cy="12" r="10" />
@@ -291,16 +296,26 @@
         monthlyGoal,
         runnerName,
         runs,
+        chartMode,
+        setChartMode,
+        chartOffset,
+        setChartOffset,
         onOpenSettings,
         onViewHistory,
       }) => {
         const chartHeight = 80;
         const chartWidth = 100;
-        const maxVal = Math.max(15, ...stats.chartData.map((d) => d.distance));
+
+        // Adjust scale based on max value in the current view, prevent 0 division
+        const maxVal = Math.max(10, ...stats.chartData.map((d) => d.distance));
+
+        // Dynamic width scaling based on data points count
+        const dataCount = stats.chartData.length;
+        const step = dataCount > 1 ? chartWidth / (dataCount - 1) : chartWidth;
 
         const points = stats.chartData
           .map((day, i) => {
-            const x = (i / 6) * chartWidth;
+            const x = i * step;
             const y = chartHeight - (day.distance / maxVal) * chartHeight;
             return `${x},${y}`;
           })
@@ -308,6 +323,7 @@
 
         const areaPath = `0,${chartHeight} ${points} ${chartWidth},${chartHeight}`;
 
+        // Celebration Effect
         useEffect(() => {
           if (stats.monthTotal >= monthlyGoal && monthlyGoal > 0) {
             const hasCelebrated = sessionStorage.getItem(
@@ -364,6 +380,7 @@
 
         return (
           <div className="space-y-6 pb-24 animate-in fade-in duration-500">
+            {/* Header */}
             <div className="flex justify-between items-center">
               <div>
                 <h1 className="text-2xl font-bold text-white">
@@ -379,10 +396,12 @@
               </button>
             </div>
 
+            {/* Main Progress */}
             <div className="flex flex-col items-center justify-center py-4">
               <CircularProgress value={stats.monthTotal} max={monthlyGoal} />
             </div>
 
+            {/* Stats Cards */}
             <div className="grid grid-cols-3 gap-3">
               <Card className="flex flex-col items-center justify-center p-3 py-4">
                 <span className="text-slate-400 text-xs mb-1">今日</span>
@@ -404,12 +423,51 @@
               </Card>
             </div>
 
+            {/* Chart Section */}
             <Card>
+              {/* Chart Controls */}
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-white font-medium flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-orange-500" /> 本週趨勢
-                </h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setChartMode("week");
+                      setChartOffset(0);
+                    }}
+                    className={`text-xs px-3 py-1 rounded-full transition ${chartMode === "week" ? "bg-orange-500 text-white" : "bg-slate-900 text-slate-400"}`}
+                  >
+                    週
+                  </button>
+                  <button
+                    onClick={() => {
+                      setChartMode("month");
+                      setChartOffset(0);
+                    }}
+                    className={`text-xs px-3 py-1 rounded-full transition ${chartMode === "month" ? "bg-orange-500 text-white" : "bg-slate-900 text-slate-400"}`}
+                  >
+                    月
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 bg-slate-900 rounded-lg p-1">
+                  <button
+                    onClick={() => setChartOffset((prev) => prev - 1)}
+                    className="p-1 text-slate-400 hover:text-white transition"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-[10px] text-slate-300 min-w-[70px] text-center font-mono">
+                    {stats.chartLabel}
+                  </span>
+                  <button
+                    onClick={() => setChartOffset((prev) => prev + 1)}
+                    disabled={chartOffset === 0}
+                    className={`p-1 transition ${chartOffset === 0 ? "text-slate-700 cursor-not-allowed" : "text-slate-400 hover:text-white"}`}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
+
+              {/* Chart Area */}
               <div className="relative h-32 w-full mb-6 px-1">
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
@@ -430,41 +488,63 @@
                     strokeLinejoin="round"
                   />
                 </svg>
-                {stats.chartData.map((day, i) => (
-                  <Fragment key={i}>
-                    <div
-                      className="absolute group"
-                      style={{
-                        left: `${(i / 6) * 100}%`,
-                        bottom: `${(day.distance / maxVal) * 100}%`,
-                        transform: "translate(-50%, 50%)",
-                      }}
-                    >
-                      <div className="w-8 h-8 -m-3 bg-transparent absolute rounded-full cursor-pointer z-10" />
-                      <div className="w-2 h-2 rounded-full bg-slate-900 border-2 border-orange-500 transition-all duration-300 group-hover:scale-150 group-hover:bg-orange-500 group-hover:border-white shadow-sm z-0 relative" />
+                {stats.chartData.map((day, i) => {
+                  // Only show dots if there's enough space (always show for week, optimize for month)
+                  const showDot =
+                    chartMode === "week" || i % 5 === 0 || day.distance > 0;
+                  const dotSize =
+                    chartMode === "week" ? "w-2 h-2" : "w-1.5 h-1.5";
+                  const leftPos = `${(i / (dataCount - 1)) * 100}%`;
 
-                      {/* Tooltip */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none transform translate-y-1 group-hover:translate-y-0 z-20">
-                        <div className="bg-slate-800 text-white text-[10px] px-2 py-1 rounded border border-slate-600 shadow-xl whitespace-nowrap font-bold">
-                          {day.distance} km
+                  return (
+                    <Fragment key={i}>
+                      <div
+                        className="absolute group"
+                        style={{
+                          left: leftPos,
+                          bottom: `${(day.distance / maxVal) * 100}%`,
+                          transform: "translate(-50%, 50%)",
+                        }}
+                      >
+                        <div className="w-6 h-6 -m-3 bg-transparent absolute rounded-full cursor-pointer z-10" />
+                        {showDot && (
+                          <div
+                            className={`${dotSize} rounded-full bg-slate-900 border-2 border-orange-500 transition-all duration-300 group-hover:scale-150 group-hover:bg-orange-500 group-hover:border-white shadow-sm z-0 relative`}
+                          />
+                        )}
+
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none transform translate-y-1 group-hover:translate-y-0 z-20">
+                          <div className="bg-slate-800 text-white text-[10px] px-2 py-1 rounded border border-slate-600 shadow-xl whitespace-nowrap font-bold flex flex-col items-center">
+                            <span>{day.distance} km</span>
+                            <span className="text-[8px] font-normal text-slate-400">
+                              {day.date.slice(5)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div
-                      className="absolute bottom-0 text-[10px] text-slate-500 transform translate-y-full pt-4 font-mono"
-                      style={{
-                        left: `${(i / 6) * 100}%`,
-                        transform: "translateX(-50%) translateY(100%)",
-                      }}
-                    >
-                      {day.displayDate}
-                    </div>
-                  </Fragment>
-                ))}
+                      {/* X-Axis Labels (Selective) */}
+                      {(chartMode === "week" || i % 5 === 0) && (
+                        <div
+                          className="absolute bottom-0 text-[10px] text-slate-500 transform translate-y-full pt-4 font-mono"
+                          style={{
+                            left: leftPos,
+                            transform: "translateX(-50%) translateY(100%)",
+                          }}
+                        >
+                          {chartMode === "week"
+                            ? day.displayDate
+                            : day.displayDate.split("/")[1]}
+                        </div>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </div>
             </Card>
 
+            {/* Footer List */}
             <div className="flex justify-between items-center px-1">
               <h3 className="text-white font-medium">最近活動</h3>
               <button
@@ -503,6 +583,7 @@
         );
       };
 
+      // --- Other Views (AddRun, History) remain same, just redeclared for completeness ---
       const AddRunView = ({ initialData, onSave, onCancel }) => {
         const [date, setDate] = useState(
           initialData?.date || getLocalDateString(new Date()),
@@ -637,6 +718,7 @@
         </div>
       );
 
+      // --- Main App Logic ---
       function App() {
         const [runs, setRuns] = useState(() => {
           try {
@@ -656,6 +738,10 @@
         const [view, setView] = useState("dashboard");
         const [editingId, setEditingId] = useState(null);
 
+        // New States for Chart View
+        const [chartMode, setChartMode] = useState("week"); // 'week' | 'month'
+        const [chartOffset, setChartOffset] = useState(0);
+
         const [isEditingSettings, setIsEditingSettings] = useState(false);
         const [tempGoal, setTempGoal] = useState(monthlyGoal);
         const [tempName, setTempName] = useState(runnerName);
@@ -671,52 +757,103 @@
           const now = new Date();
           const todayStr = getLocalDateString(now);
 
-          // 計算本週一
-          const startOfWeek = new Date(now);
-          const day = now.getDay(); // 0 is Sun, 1 is Mon
-          const diff = day === 0 ? 6 : day - 1;
-          startOfWeek.setDate(now.getDate() - diff);
-          startOfWeek.setHours(0, 0, 0, 0);
-
+          // --- Dashboard Stats (Fixed to Current Time) ---
           let mTotal = 0,
             wTotal = 0,
             tTotal = 0;
 
-          // 初始化一週數據
-          const weekData = Array.from({ length: 7 }, (_, i) => {
-            const d = new Date(startOfWeek);
-            d.setDate(startOfWeek.getDate() + i);
-            return {
-              date: getLocalDateString(d),
-              displayDate: `${d.getMonth() + 1}/${d.getDate()}`,
-              distance: 0,
-            };
-          });
+          // Current Week Start (for Dashboard Card)
+          const currentWeekStart = new Date(now);
+          const currentDay = now.getDay();
+          const diffToMon = currentDay === 0 ? 6 : currentDay - 1;
+          currentWeekStart.setDate(now.getDate() - diffToMon);
+          currentWeekStart.setHours(0, 0, 0, 0);
+          const currentWeekEnd = new Date(currentWeekStart);
+          currentWeekEnd.setDate(currentWeekStart.getDate() + 7);
 
+          // --- Chart Data Calculation (Dynamic based on Mode/Offset) ---
+          let viewStart, viewEnd, chartLabel;
+          let chartDataPoints = [];
+
+          if (chartMode === "week") {
+            // Weekly View Logic
+            viewStart = new Date(now);
+            viewStart.setDate(now.getDate() + chartOffset * 7);
+            const day = viewStart.getDay();
+            const diff = day === 0 ? 6 : day - 1;
+            viewStart.setDate(viewStart.getDate() - diff);
+            viewStart.setHours(0, 0, 0, 0);
+
+            viewEnd = new Date(viewStart);
+            viewEnd.setDate(viewStart.getDate() + 7);
+
+            // Label: "1/15 - 1/21"
+            const e = new Date(viewStart);
+            e.setDate(viewStart.getDate() + 6);
+            chartLabel = `${viewStart.getMonth() + 1}/${viewStart.getDate()} - ${e.getMonth() + 1}/${e.getDate()}`;
+
+            // Generate 7 days
+            chartDataPoints = Array.from({ length: 7 }, (_, i) => {
+              const d = new Date(viewStart);
+              d.setDate(viewStart.getDate() + i);
+              return {
+                date: getLocalDateString(d),
+                displayDate: `${d.getMonth() + 1}/${d.getDate()}`,
+                distance: 0,
+              };
+            });
+          } else {
+            // Monthly View Logic
+            viewStart = new Date(
+              now.getFullYear(),
+              now.getMonth() + chartOffset,
+              1,
+            );
+            viewEnd = new Date(
+              now.getFullYear(),
+              now.getMonth() + chartOffset + 1,
+              0,
+            ); // Last day of month
+            viewEnd.setHours(23, 59, 59, 999); // Include full last day
+
+            // Label: "2024/05"
+            chartLabel = `${viewStart.getFullYear()}/${viewStart.getMonth() + 1}`;
+
+            // Generate days for that month
+            const daysInMonth = viewEnd.getDate();
+            chartDataPoints = Array.from({ length: daysInMonth }, (_, i) => {
+              const d = new Date(
+                viewStart.getFullYear(),
+                viewStart.getMonth(),
+                i + 1,
+              );
+              return {
+                date: getLocalDateString(d),
+                displayDate: `${d.getMonth() + 1}/${d.getDate()}`,
+                distance: 0,
+              };
+            });
+          }
+
+          // Process Runs
           runs.forEach((r) => {
             const d = parseFloat(r.distance);
             if (isNaN(d)) return;
 
             const [ry, rm, rd] = r.date.split("-").map(Number);
 
-            // 月總量 (注意月份是 0-indexed, 但我們存的是 1-based 字串)
+            // 1. Dashboard Stats (Current)
             if (rm - 1 === now.getMonth() && ry === now.getFullYear()) {
               mTotal += d;
             }
-
-            // 週總量
             const rObj = new Date(ry, rm - 1, rd);
-            // 簡單比較時間戳記
-            if (rObj >= startOfWeek) {
-              // 確保不超過這週日 (雖然邏輯上未來的還沒到，但以防萬一)
-              const endOfWeek = new Date(startOfWeek);
-              endOfWeek.setDate(startOfWeek.getDate() + 7);
-              if (rObj < endOfWeek) wTotal += d;
+            if (rObj >= currentWeekStart && rObj < currentWeekEnd) {
+              wTotal += d;
             }
-
             if (r.date === todayStr) tTotal += d;
 
-            const chartDay = weekData.find((wd) => wd.date === r.date);
+            // 2. Chart Data Population (Dynamic View)
+            const chartDay = chartDataPoints.find((wd) => wd.date === r.date);
             if (chartDay) chartDay.distance += d;
           });
 
@@ -725,35 +862,24 @@
             weekTotal: wTotal,
             todayTotal: tTotal,
             remaining: Math.max(0, monthlyGoal - mTotal),
-            chartData: weekData,
+            chartData: chartDataPoints,
+            chartLabel: chartLabel,
           };
-        }, [runs, monthlyGoal]);
+        }, [runs, monthlyGoal, chartMode, chartOffset]);
 
         const handleSaveRun = (data) => {
           if (editingId) {
-            // Update existing run
             setRuns(
               runs.map((r) => (r.id === editingId ? { ...r, ...data } : r)),
             );
             setEditingId(null);
           } else {
-            // Create new run
             setRuns(
               [{ id: Date.now(), ...data }, ...runs].sort(
                 (a, b) => new Date(b.date) - new Date(a.date),
               ),
             );
           }
-          setView("dashboard");
-        };
-
-        const handleEditRun = (id) => {
-          setEditingId(id);
-          setView("add");
-        };
-
-        const handleCancelEdit = () => {
-          setEditingId(null);
           setView("dashboard");
         };
 
@@ -766,6 +892,10 @@
                   monthlyGoal={monthlyGoal}
                   runnerName={runnerName}
                   runs={runs}
+                  chartMode={chartMode}
+                  setChartMode={setChartMode}
+                  chartOffset={chartOffset}
+                  setChartOffset={setChartOffset}
                   onOpenSettings={() => {
                     setTempGoal(monthlyGoal);
                     setTempName(runnerName);
@@ -778,13 +908,19 @@
                 <AddRunView
                   initialData={runs.find((r) => r.id === editingId)}
                   onSave={handleSaveRun}
-                  onCancel={handleCancelEdit}
+                  onCancel={() => {
+                    setEditingId(null);
+                    setView("dashboard");
+                  }}
                 />
               )}
               {view === "history" && (
                 <HistoryView
                   runs={runs}
-                  onEdit={handleEditRun}
+                  onEdit={(id) => {
+                    setEditingId(id);
+                    setView("add");
+                  }}
                   onDelete={(id) => setDeleteConfirmId(id)}
                   onBack={() => setView("dashboard")}
                 />
@@ -832,7 +968,6 @@
                         />
                       </div>
                     </div>
-
                     <button
                       onClick={() => {
                         setMonthlyGoal(parseFloat(tempGoal));
@@ -849,7 +984,6 @@
                     >
                       取消
                     </button>
-
                     <div className="pt-4 border-t border-slate-700 mt-4">
                       <button
                         onClick={() => window.location.reload()}
