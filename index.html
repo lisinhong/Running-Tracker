@@ -404,9 +404,6 @@
                 <h3 className="text-white font-medium flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-orange-500" /> 本週趨勢
                 </h3>
-                <span className="text-[10px] text-slate-500 uppercase">
-                  {stats.weekRange}
-                </span>
               </div>
               <div className="relative h-32 w-full mb-6 px-1">
                 <svg
@@ -709,7 +706,6 @@
             todayTotal: tTotal,
             remaining: Math.max(0, monthlyGoal - mTotal),
             chartData: weekData,
-            weekRange: `${weekData[0].displayDate} - ${weekData[6].displayDate}`,
           };
         }, [runs, monthlyGoal]);
 
